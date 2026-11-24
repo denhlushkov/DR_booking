@@ -1,0 +1,22 @@
+# Залежності та артефакти збірки
+node_modules/
+dist/
+build/
+coverage/
+*.tsbuildinfo
+
+# Локальні змінні оточення (секрети!)
+.env
+.env.*
+!.env.example
+
+# Логи
+*.log
+npm-debug.log*
+
+# IDE / ОС
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
