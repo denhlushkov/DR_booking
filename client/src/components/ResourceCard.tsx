@@ -4,15 +4,16 @@ import { RESOURCE_STATUS_LABELS, RESOURCE_TYPE_LABELS } from '../utils/labels';
 interface Props {
   resource: Resource;
   onBook?: (resource: Resource) => void;
+  onOpenCalendar?: (resource: Resource) => void;
   busy?: boolean;
 }
 
-export function ResourceCard({ resource, onBook, busy }: Props) {
+export function ResourceCard({ resource, onBook, onOpenCalendar, busy }: Props) {
   const { zone, capacity, equipment } = resource.attributes;
   const available = resource.status === 'AVAILABLE';
 
   return (
-    <article className="card flex flex-col gap-3">
+    <article className="card flex flex-col gap-3" data-testid="resource-card">
       <div className="flex items-start justify-between gap-2">
         <div>
           <h3 className="font-semibold">{resource.name}</h3>
@@ -43,16 +44,23 @@ export function ResourceCard({ resource, onBook, busy }: Props) {
         )}
       </dl>
 
-      {onBook && (
-        <button
-          type="button"
-          className="btn-primary mt-auto"
-          disabled={!available || busy}
-          onClick={() => onBook(resource)}
-        >
-          {busy ? 'Бронювання…' : 'Забронювати'}
-        </button>
-      )}
+      <div className="mt-auto flex gap-2">
+        {onBook && (
+          <button
+            type="button"
+            className="btn-primary flex-1"
+            disabled={!available || busy}
+            onClick={() => onBook(resource)}
+          >
+            {busy ? 'Бронювання…' : 'Забронювати'}
+          </button>
+        )}
+        {onOpenCalendar && (
+          <button type="button" className="btn-secondary" disabled={!available} onClick={() => onOpenCalendar(resource)}>
+            Календар
+          </button>
+        )}
+      </div>
     </article>
   );
 }
