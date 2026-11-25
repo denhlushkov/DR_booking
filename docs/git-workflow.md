@@ -33,7 +33,7 @@ test(analytics): cover CSV escaping
 3. Відправити гілку: `git push -u origin feature/<назва>` і відкрити Pull Request у `main`.
 4. Заповнити шаблон PR (задачі беклогу, як перевірити).
 5. **Рев'юер — інший учасник команди**: перевіряє код за чеклістом шаблону, залишає коментарі або схвалює (Approve).
-6. Злиття — лише після схвалення та успішного CI (GitHub Actions: `Server CI`, `Client CI`).
+6. Злиття — лише після схвалення та успішного CI (GitHub Actions `CI`: модульні тести й тести на PostgreSQL, потім інтеграція на повному стенді Docker Compose).
 7. Після злиття гілку видаляють.
 
 ## Рекомендовані налаштування репозиторію на GitHub
@@ -41,4 +41,9 @@ test(analytics): cover CSV escaping
 `Settings → Branches → Add branch protection rule` для `main`:
 
 - Require a pull request before merging → Require approvals: **1**
-- Require status checks to pass before merging → `test` (Server CI), `build` (Client CI)
+- Require status checks to pass before merging → `CI / test`, `CI / integration`
+
+## Залежності
+
+- Пакети встановлюються лише з кореня репозиторію: `npm install <пакет> -w server` (або `-w client`, `-w e2e`). Єдиний `package-lock.json` у корені комітиться разом зі змінами `package.json`.
+- Оновлення залежностей приходять від Dependabot окремими PR і проходять той самий CI.

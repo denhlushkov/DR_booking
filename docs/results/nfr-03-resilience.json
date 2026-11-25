@@ -1,0 +1,27 @@
+{
+  "measuredAt": "2026-11-25T10:03:50.628Z",
+  "apiCrash": {
+    "action": "SIGKILL процесу Node у контейнері API",
+    "restartsBefore": 0,
+    "restartsAfter": 1,
+    "recoveredInMs": 4953,
+    "passed": true
+  },
+  "databaseOutage": {
+    "action": "docker compose stop db на ~5 с",
+    "healthDuringOutage": {
+      "status": 503,
+      "body": {
+        "status": "degraded",
+        "uptimeSeconds": 7,
+        "checks": {
+          "database": "down"
+        }
+      }
+    },
+    "healthAfter5s": 503,
+    "recoveredAfterDbStartInMs": 222,
+    "apiRestartsDuringOutage": 0,
+    "passed": true
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "measuredAt": "2026-11-25T10:02:59.924Z",
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "horizontalOverflowPx": {
+    "login": 0,
+    "search": 0,
+    "bookings": 0,
+    "admin": 0
+  }
+}

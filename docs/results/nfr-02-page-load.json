@@ -1,0 +1,10 @@
+{
+  "measuredAt": "2026-11-25T10:03:00.520Z",
+  "network": "10 Мбіт/с, RTT 20 мс, кеш вимкнено",
+  "listVisibleMs": 345,
+  "domContentLoadedMs": 213,
+  "loadEventMs": 213,
+  "transferredBytes": 128312,
+  "requests": 7,
+  "limitMs": 2000
+}
