@@ -1,7 +1,7 @@
 # Контекст збірки — корінь репозиторію (npm workspaces, спільний package-lock.json).
 
 # ---------- build ----------
-FROM node:24-alpine AS build
+FROM node:26-alpine AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
 COPY server/package.json server/
