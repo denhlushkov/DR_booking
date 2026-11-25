@@ -1,0 +1,4 @@
+# Єдині кінці рядків LF: shell-скрипти й конфіги в Docker-контейнерах ламаються від CRLF.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
