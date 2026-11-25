@@ -1,5 +1,11 @@
 import { ResourceStatus, ResourceType } from '../../src/domain/enums';
 import { Resource, type ResourceProps } from '../../src/domain/resource';
+import {
+  InMemoryBookingRepository,
+  InMemoryResourceRepository,
+  InMemoryResourceStatusHistoryRepository,
+  InMemoryUnitOfWork,
+} from '../../src/infrastructure/memory/in-memory.repositories';
 import type {
   BookingNotification,
   INotificationService,
@@ -42,4 +48,17 @@ export function makeResource(overrides: Partial<ResourceProps> = {}): Resource {
     attributes: {},
     ...overrides,
   });
+}
+
+/** In-memory сховище з Unit of Work для тестів сервісів. */
+export function memoryStore() {
+  const resources = new InMemoryResourceRepository();
+  const bookings = new InMemoryBookingRepository();
+  const statusHistory = new InMemoryResourceStatusHistoryRepository();
+  return {
+    resources,
+    bookings,
+    statusHistory,
+    uow: new InMemoryUnitOfWork({ resources, bookings, statusHistory }),
+  };
 }

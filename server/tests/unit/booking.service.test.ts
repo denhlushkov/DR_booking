@@ -1,55 +1,52 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { BookingStatus, ResourceStatus, Role } from '../../src/domain/enums';
-import {
-  InMemoryBookingRepository,
-  InMemoryResourceRepository,
-  InMemoryUnitOfWork,
-} from '../../src/infrastructure/memory/in-memory.repositories';
+import { BookingStatus, NotificationType, ResourceStatus, Role } from '../../src/domain/enums';
 import { BookingPolicy, DEFAULT_BOOKING_RULES } from '../../src/modules/bookings/booking.policy';
 import { BookingService } from '../../src/modules/bookings/booking.service';
-import { NotificationType } from '../../src/modules/notifications/notification.service';
 import {
   BusinessRuleError,
   ConflictError,
   ForbiddenError,
   ValidationError,
 } from '../../src/shared/errors';
-import { at, FakeNotifier, FixedClock, makeResource } from '../helpers/fakes';
+import { at, FakeNotifier, FixedClock, makeResource, memoryStore } from '../helpers/fakes';
 
 describe('BookingService', () => {
   const NOW = at('2026-12-01T08:00:00Z');
   let clock: FixedClock;
   let notifier: FakeNotifier;
-  let resources: InMemoryResourceRepository;
+  let store: ReturnType<typeof memoryStore>;
   let service: BookingService;
   let resourceId: string;
 
   beforeEach(async () => {
     clock = new FixedClock(NOW);
     notifier = new FakeNotifier();
-    resources = new InMemoryResourceRepository();
-    const bookings = new InMemoryBookingRepository();
+    store = memoryStore();
     service = new BookingService(
-      new InMemoryUnitOfWork({ resources, bookings }),
-      bookings,
-      resources,
+      store.uow,
+      store.bookings,
+      store.resources,
       new BookingPolicy(DEFAULT_BOOKING_RULES, clock),
       notifier,
       clock,
     );
     const resource = makeResource({ name: 'Стіл A-101' });
     resourceId = resource.id;
-    await resources.insert(resource);
+    await store.resources.insert(resource);
   });
 
-  const book = (userId: string, start: string, end: string) =>
-    service.createBooking({ userId, resourceId, startTime: at(start), endTime: at(end) });
+  const book = (userId: string, start: string, end: string, id = resourceId) =>
+    service.createBooking({ userId, resourceId: id, startTime: at(start), endTime: at(end) });
 
   it('створює бронювання та надсилає сповіщення (FR-03, FR-11)', async () => {
     const booking = await book('u1', '2026-12-01T10:00:00Z', '2026-12-01T11:00:00Z');
     expect(booking.status).toBe(BookingStatus.CONFIRMED);
     expect(notifier.sent).toEqual([
-      expect.objectContaining({ type: NotificationType.BOOKING_CREATED, resourceName: 'Стіл A-101' }),
+      expect.objectContaining({
+        type: NotificationType.BOOKING_CREATED,
+        bookingId: booking.id,
+        resourceName: 'Стіл A-101',
+      }),
     ]);
   });
 
@@ -78,10 +75,46 @@ describe('BookingService', () => {
   });
 
   it('не дозволяє бронювати ресурс на обслуговуванні (FR-06)', async () => {
-    const resource = (await resources.findById(resourceId))!;
+    const resource = (await store.resources.findById(resourceId))!;
     resource.status = ResourceStatus.MAINTENANCE;
-    await resources.update(resource);
+    await store.resources.update(resource);
     await expect(book('u1', '2026-12-01T10:00:00Z', '2026-12-01T11:00:00Z')).rejects.toThrow(BusinessRuleError);
+  });
+
+  describe('зміна часу бронювання', () => {
+    it('переносить бронювання і надсилає сповіщення про зміну (FR-11)', async () => {
+      const b = await book('u1', '2026-12-01T10:00:00Z', '2026-12-01T11:00:00Z');
+      const moved = await service.rescheduleBooking(
+        b.id,
+        { startTime: at('2026-12-01T10:30:00Z'), endTime: at('2026-12-01T12:00:00Z') },
+        { id: 'u1', role: Role.EMPLOYEE },
+      );
+      expect(moved.startTime.toISOString()).toBe('2026-12-01T10:30:00.000Z');
+      expect(notifier.sent.at(-1)?.type).toBe(NotificationType.BOOKING_UPDATED);
+    });
+
+    it('не дозволяє перенести на зайнятий час (FR-04)', async () => {
+      const b = await book('u1', '2026-12-01T10:00:00Z', '2026-12-01T11:00:00Z');
+      await book('u2', '2026-12-01T12:00:00Z', '2026-12-01T13:00:00Z');
+      await expect(
+        service.rescheduleBooking(
+          b.id,
+          { startTime: at('2026-12-01T11:30:00Z'), endTime: at('2026-12-01T12:30:00Z') },
+          { id: 'u1', role: Role.EMPLOYEE },
+        ),
+      ).rejects.toThrow(ConflictError);
+    });
+
+    it('не дозволяє змінювати чуже бронювання', async () => {
+      const b = await book('u1', '2026-12-01T10:00:00Z', '2026-12-01T11:00:00Z');
+      await expect(
+        service.rescheduleBooking(
+          b.id,
+          { startTime: at('2026-12-01T14:00:00Z'), endTime: at('2026-12-01T15:00:00Z') },
+          { id: 'u2', role: Role.EMPLOYEE },
+        ),
+      ).rejects.toThrow(ForbiddenError);
+    });
   });
 
   describe('скасування (FR-05)', () => {
