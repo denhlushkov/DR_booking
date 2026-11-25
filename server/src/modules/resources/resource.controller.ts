@@ -66,7 +66,10 @@ export class ResourceController {
     res.json(await this.resources.update(parseId(req.params.id), parse(updateSchema, req.body)));
   };
 
-  /** PATCH /api/v1/resources/:id/status — FR-06 (обслуговування / блокування) */
+  /**
+   * PATCH /api/v1/resources/:id/status — FR-06 (обслуговування / блокування).
+   * Відповідь: { resource, cancelledBookings }.
+   */
   changeStatus = async (req: Request, res: Response): Promise<void> => {
     const { status } = parse(statusSchema, req.body);
     res.json(await this.resources.changeStatus(parseId(req.params.id), status));

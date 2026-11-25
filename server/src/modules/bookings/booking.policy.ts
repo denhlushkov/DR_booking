@@ -42,12 +42,20 @@ export class BookingPolicy {
     }
   }
 
+  /** FR-05: скасування не пізніше ніж за N хвилин до початку. */
   assertCanCancel(booking: Booking): void {
+    const n = this.rules.cancellationCutoffMinutes;
+    this.assertBeforeCutoff(booking, `Скасування можливе не пізніше ніж за ${n} хв до початку`);
+  }
+
+  /** Те саме правило діє для зміни часу бронювання. */
+  assertCanReschedule(booking: Booking): void {
+    const n = this.rules.cancellationCutoffMinutes;
+    this.assertBeforeCutoff(booking, `Змінити бронювання можна не пізніше ніж за ${n} хв до початку`);
+  }
+
+  private assertBeforeCutoff(booking: Booking, message: string): void {
     const minutesLeft = (booking.startTime.getTime() - this.clock.now().getTime()) / 60_000;
-    if (minutesLeft < this.rules.cancellationCutoffMinutes) {
-      throw new BusinessRuleError(
-        `Скасування можливе не пізніше ніж за ${this.rules.cancellationCutoffMinutes} хв до початку`,
-      );
-    }
+    if (minutesLeft < this.rules.cancellationCutoffMinutes) throw new BusinessRuleError(message);
   }
 }
