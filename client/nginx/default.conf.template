@@ -1,0 +1,72 @@
+# Шаблон: ${PUBLIC_HTTPS_PORT} підставляється при старті контейнера (envsubst образу nginx).
+
+# NFR-04: захист входу від перебору паролів — до 20 спроб на хвилину з однієї IP-адреси.
+limit_req_zone $binary_remote_addr zone=login:10m rate=20r/m;
+
+# HTTP → HTTPS
+server {
+    listen 80;
+    server_name _;
+    return 301 https://$host:${PUBLIC_HTTPS_PORT}$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name _;
+
+    # NFR-04: лише TLS 1.3.
+    ssl_certificate     /etc/nginx/certs/server.crt;
+    ssl_certificate_key /etc/nginx/certs/server.key;
+    ssl_protocols       TLSv1.3;
+    ssl_session_cache   shared:TLS:10m;
+    ssl_session_timeout 1h;
+
+    add_header Strict-Transport-Security "max-age=31536000" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "DENY" always;
+    add_header Referrer-Policy "no-referrer" always;
+    add_header Content-Security-Policy "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'" always;
+
+    # NFR-02: стиснення статики та відповідей API.
+    gzip on;
+    gzip_min_length 1024;
+    gzip_types text/css application/javascript application/json image/svg+xml text/csv;
+
+    root /usr/share/nginx/html;
+
+    # Адреса API визначається через DNS Docker під час роботи (а не один раз при старті),
+    # тож перестворення контейнера server не ламає проксі.
+    resolver 127.0.0.11 valid=10s ipv6=off;
+    set $api_upstream http://server:3000;
+
+    location = /api/v1/auth/login {
+        limit_req zone=login burst=20 nodelay;
+        limit_req_status 429;
+        proxy_pass $api_upstream;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # Reverse proxy на API-сервер (сервіс `server` у docker-compose.yml).
+    location /api/ {
+        proxy_pass $api_upstream;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 30s;
+    }
+
+    # Файли з хешем в імені кешуються браузером на рік (NFR-02).
+    location /assets/ {
+        expires 1y;
+    }
+
+    # SPA: усі інші маршрути віддають index.html.
+    location / {
+        try_files $uri /index.html;
+    }
+}

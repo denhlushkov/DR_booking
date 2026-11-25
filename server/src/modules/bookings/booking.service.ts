@@ -1,18 +1,16 @@
 import { randomUUID } from 'node:crypto';
 import { Booking } from '../../domain/booking';
-import { Role } from '../../domain/enums';
+import { NotificationType, Role } from '../../domain/enums';
+import type { Resource } from '../../domain/resource';
 import type { Actor, IdGenerator } from '../../shared/actor';
 import type { IClock } from '../../shared/clock';
 import { BusinessRuleError, ConflictError, ForbiddenError, NotFoundError } from '../../shared/errors';
 import type { TimeRange } from '../../shared/time-range';
-import {
-  type INotificationService,
-  NotificationType,
-} from '../notifications/notification.service';
+import { type INotificationService, notifySafely } from '../notifications/notification.service';
 import type { IResourceRepository } from '../resources/resource.repository';
+import type { TransactionalRepositories, IUnitOfWork } from '../unit-of-work';
 import type { IBookingRepository } from './booking.repository';
 import type { BookingPolicy } from './booking.policy';
-import type { IUnitOfWork } from './unit-of-work';
 
 export interface CreateBookingInput {
   userId: string;
@@ -21,9 +19,14 @@ export interface CreateBookingInput {
   endTime: Date;
 }
 
+export interface RescheduleInput {
+  startTime: Date;
+  endTime: Date;
+}
+
 /**
  * Сервіс бронювань: FR-03 (створення), FR-04 (контроль колізій),
- * FR-05 (скасування), FR-11 (сповіщення).
+ * FR-05 (скасування), FR-11 (сповіщення про створення, зміну, скасування).
  */
 export class BookingService {
   constructor(
@@ -44,18 +47,8 @@ export class BookingService {
     const range: TimeRange = { start: input.startTime, end: input.endTime };
     this.policy.assertValidInterval(range);
 
-    const { booking, resourceName } = await this.uow.run(async ({ bookings, resources }) => {
-      const resource = await resources.findByIdForUpdate(input.resourceId);
-      if (!resource) throw new NotFoundError('Ресурс не знайдено');
-      if (!resource.isBookable()) {
-        throw new BusinessRuleError('Ресурс тимчасово недоступний для бронювання');
-      }
-
-      const overlapping = await bookings.findActiveOverlapping(range, [resource.id]);
-      if (!resource.isAvailable(range.start, range.end, overlapping)) {
-        throw new ConflictError('Обраний час уже зайнятий');
-      }
-
+    const { booking, resource } = await this.uow.run(async (repos) => {
+      const resource = await lockFreeResource(repos, input.resourceId, range);
       const created = Booking.create(
         {
           id: this.newId(),
@@ -66,11 +59,32 @@ export class BookingService {
         },
         this.clock.now(),
       );
-      await bookings.insert(created);
-      return { booking: created, resourceName: resource.name };
+      await repos.bookings.insert(created);
+      return { booking: created, resource };
     });
 
-    await this.notify(NotificationType.BOOKING_CREATED, booking, resourceName);
+    await this.notify(NotificationType.BOOKING_CREATED, booking, resource.name);
+    return booking;
+  }
+
+  /** Зміна часу власного бронювання з тією самою транзакційною перевіркою колізій. */
+  async rescheduleBooking(bookingId: string, input: RescheduleInput, actor: Actor): Promise<Booking> {
+    const range: TimeRange = { start: input.startTime, end: input.endTime };
+    this.policy.assertValidInterval(range);
+
+    const { booking, resource } = await this.uow.run(async (repos) => {
+      const booking = await repos.bookings.findById(bookingId);
+      if (!booking) throw new NotFoundError('Бронювання не знайдено');
+      if (booking.userId !== actor.id) throw new ForbiddenError('Змінювати можна лише власні бронювання');
+      this.policy.assertCanReschedule(booking);
+
+      const resource = await lockFreeResource(repos, booking.resourceId, range, booking.id);
+      booking.reschedule(input.startTime, input.endTime);
+      await repos.bookings.save(booking);
+      return { booking, resource };
+    });
+
+    await this.notify(NotificationType.BOOKING_UPDATED, booking, resource.name);
     return booking;
   }
 
@@ -81,7 +95,7 @@ export class BookingService {
 
   /**
    * FR-05: співробітник скасовує власне бронювання не пізніше ніж за 15 хв.
-   * Адміністратор може примусово скасувати будь-яке бронювання (з сповіщенням власника).
+   * Адміністратор може примусово скасувати будь-яке бронювання (зі сповіщенням власника).
    */
   async cancelBooking(bookingId: string, actor: Actor): Promise<Booking> {
     const booking = await this.bookings.findById(bookingId);
@@ -96,25 +110,43 @@ export class BookingService {
     await this.bookings.save(booking);
 
     const resource = await this.resources.findById(booking.resourceId);
-    const type = isOwner
-      ? NotificationType.BOOKING_CANCELLED
-      : NotificationType.BOOKING_CANCELLED_BY_ADMIN;
+    const type = isOwner ? NotificationType.BOOKING_CANCELLED : NotificationType.BOOKING_CANCELLED_BY_ADMIN;
     await this.notify(type, booking, resource?.name ?? booking.resourceId);
     return booking;
   }
 
-  /** Сповіщення не повинні ламати основний сценарій: помилку лише логуємо. */
-  private async notify(type: NotificationType, booking: Booking, resourceName: string): Promise<void> {
-    try {
-      await this.notifier.send({
-        type,
-        userId: booking.userId,
-        resourceName,
-        startTime: booking.startTime,
-        endTime: booking.endTime,
-      });
-    } catch (error) {
-      console.error('Не вдалося надіслати сповіщення', error);
-    }
+  private notify(type: NotificationType, booking: Booking, resourceName: string): Promise<void> {
+    return notifySafely(this.notifier, {
+      type,
+      userId: booking.userId,
+      bookingId: booking.id,
+      resourceName,
+      startTime: booking.startTime,
+      endTime: booking.endTime,
+    });
   }
+}
+
+/**
+ * Блокує рядок ресурсу (SELECT … FOR UPDATE) і перевіряє, що він доступний та вільний на інтервал.
+ * Усі транзакції бронювання одного ресурсу через це блокування виконуються послідовно (FR-04).
+ */
+async function lockFreeResource(
+  repos: TransactionalRepositories,
+  resourceId: string,
+  range: TimeRange,
+  excludeBookingId?: string,
+): Promise<Resource> {
+  const resource = await repos.resources.findByIdForUpdate(resourceId);
+  if (!resource) throw new NotFoundError('Ресурс не знайдено');
+  if (!resource.isBookable()) throw new BusinessRuleError('Ресурс тимчасово недоступний для бронювання');
+
+  const overlapping = await repos.bookings.findActiveOverlapping(range, {
+    resourceIds: [resource.id],
+    excludeBookingId,
+  });
+  if (!resource.isAvailable(range.start, range.end, overlapping)) {
+    throw new ConflictError('Обраний час уже зайнятий');
+  }
+  return resource;
 }

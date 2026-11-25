@@ -10,10 +10,14 @@ export function createApp(container: Container): Express {
   const auth = authenticate(container.tokenService);
 
   app.disable('x-powered-by');
+  // За Nginx: коректні IP клієнта та протокол у req.ip / req.protocol.
+  app.set('trust proxy', 'loopback, linklocal, uniquelocal');
   app.use(express.json({ limit: '100kb' }));
 
-  app.get('/api/v1/health', (_req, res) => {
-    res.json({ status: 'ok' });
+  // NFR-03: стан сервісу і його залежностей (використовує Docker healthcheck).
+  app.get('/api/v1/health', async (_req, res) => {
+    const report = await container.health();
+    res.status(report.status === 'ok' ? 200 : 503).json(report);
   });
 
   app.use('/api/v1/auth', controllers.auth.router());
@@ -21,6 +25,7 @@ export function createApp(container: Container): Express {
   app.use('/api/v1/resources', controllers.resources.router(auth));
   app.use('/api/v1/bookings', controllers.bookings.router(auth));
   app.use('/api/v1/analytics', controllers.analytics.router(auth));
+  app.use('/api/v1/notifications', controllers.notifications.router(auth));
 
   app.use(notFoundHandler);
   app.use(errorHandler);

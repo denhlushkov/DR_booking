@@ -62,3 +62,49 @@ export interface CreateResourceRequest {
   floor: number;
   attributes?: ResourceAttributes;
 }
+
+/** Відповідь на зміну статусу ресурсу (FR-06). */
+export interface StatusChangeResult {
+  resource: Resource;
+  cancelledBookings: number;
+}
+
+/** Зайнятий інтервал у календарі ресурсу (FR-10). */
+export interface BusySlot {
+  bookingId: string;
+  startTime: string;
+  endTime: string;
+}
+
+export type NotificationType =
+  | 'BOOKING_CREATED'
+  | 'BOOKING_UPDATED'
+  | 'BOOKING_CANCELLED'
+  | 'BOOKING_CANCELLED_BY_ADMIN'
+  | 'BOOKING_REMINDER';
+
+/** Сповіщення користувача (FR-11). */
+export interface AppNotification {
+  id: string;
+  type: NotificationType;
+  title: string;
+  message: string;
+  bookingId: string | null;
+  createdAt: string;
+  readAt: string | null;
+}
+
+export interface Inbox {
+  items: AppNotification[];
+  unreadCount: number;
+}
+
+/** FR-13: створення облікового запису адміністратором. */
+export interface CreateUserRequest {
+  fullName: string;
+  email: string;
+  password: string;
+  role: Role;
+  department: string;
+  position: string;
+}

@@ -1,0 +1,35 @@
+{
+  "name": "dr-booking",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Внутрішня система бронювання робочих місць та переговорних кімнат (монорепозиторій)",
+  "workspaces": [
+    "server",
+    "client",
+    "e2e"
+  ],
+  "engines": {
+    "node": ">=22.12",
+    "npm": ">=10"
+  },
+  "scripts": {
+    "dev": "concurrently -n api,web -c blue,magenta \"npm run dev -w server\" \"npm run dev -w client\"",
+    "build": "npm run build -w server -w client",
+    "typecheck": "npm run typecheck -w server -w client -w e2e",
+    "test": "npm run test -w server -w client",
+    "stack:up": "docker compose up -d --build --wait",
+    "stack:down": "docker compose down",
+    "test:api": "npx --yes newman@6 run tests/postman/dr-booking.postman_collection.json -e tests/postman/local.postman_environment.json --insecure",
+    "test:e2e": "npm run test -w e2e",
+    "test:load": "node scripts/load-test.mjs",
+    "test:resilience": "node scripts/resilience-check.mjs",
+    "test:integration": "npm run test:api && npm run test:e2e && npm run test:load && npm run test:resilience"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.10",
+    "autocannon": "^9.0.0",
+    "concurrently": "^10.0.7",
+    "typescript": "^7.0.2",
+    "vitest": "^5.1.1"
+  }
+}

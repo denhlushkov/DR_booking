@@ -29,6 +29,12 @@ export class UserService {
     return user;
   }
 
+  /** Список облікових записів для адміністратора, за алфавітом. */
+  async listUsers(): Promise<User[]> {
+    const users = await this.users.findAll();
+    return users.sort((a, b) => a.fullName.localeCompare(b.fullName, 'uk'));
+  }
+
   async createUser(input: CreateUserInput): Promise<User> {
     const email = input.email.toLowerCase();
     if (await this.users.findByEmail(email)) {

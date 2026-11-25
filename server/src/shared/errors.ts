@@ -53,6 +53,29 @@ export class ConflictError extends AppError {
   readonly code = 'CONFLICT';
 }
 
+/** 503 — тимчасова недоступність залежності (наприклад, БД). Клієнт може повторити запит. */
+export class ServiceUnavailableError extends AppError {
+  readonly statusCode = 503;
+  readonly code = 'SERVICE_UNAVAILABLE';
+
+  constructor(message = 'Сервіс тимчасово недоступний, спробуйте за кілька секунд') {
+    super(message);
+  }
+}
+
+/**
+ * Помилки з'єднання з БД/мережею: відмова, розрив, тайм-аут підключення,
+ * коди PostgreSQL класу 08 (connection exception) та 57P0x (сервер зупиняється).
+ */
+export function isTransientConnectionError(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null) return false;
+  const { code, message } = error as { code?: unknown; message?: unknown };
+  if (typeof code === 'string' && (/^(ECONNREFUSED|ECONNRESET|ENOTFOUND|EAI_AGAIN|ETIMEDOUT)$/.test(code) || /^(08|57P0)/.test(code))) {
+    return true;
+  }
+  return typeof message === 'string' && /Connection terminated|timeout exceeded when trying to connect/i.test(message);
+}
+
 /** 422 — порушення бізнес-правила (наприклад, пізнє скасування). */
 export class BusinessRuleError extends AppError {
   readonly statusCode = 422;

@@ -4,5 +4,6 @@ import type { User } from '../../domain/user';
 export interface IUserRepository {
   findById(id: string): Promise<User | null>;
   findByEmail(email: string): Promise<User | null>;
+  findAll(): Promise<User[]>;
   insert(user: User): Promise<void>;
 }

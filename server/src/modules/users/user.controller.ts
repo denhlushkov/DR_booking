@@ -23,6 +23,11 @@ export class UserController {
     res.json(user.toProfile());
   };
 
+  /** GET /api/v1/users — список користувачів (лише ADMIN) */
+  list = async (_req: Request, res: Response): Promise<void> => {
+    res.json((await this.users.listUsers()).map((u) => u.toProfile()));
+  };
+
   /** POST /api/v1/users — FR-13 (лише ADMIN) */
   create = async (req: Request, res: Response): Promise<void> => {
     const user = await this.users.createUser(parse(createUserSchema, req.body));
@@ -33,6 +38,7 @@ export class UserController {
     return Router()
       .use(authenticate)
       .get('/me', this.me)
+      .get('/', requireRole(Role.ADMIN), this.list)
       .post('/', requireRole(Role.ADMIN), this.create);
   }
 }

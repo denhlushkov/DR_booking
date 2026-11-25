@@ -12,6 +12,10 @@ export const bookingsApi = {
   /** FR-02, FR-05 */
   mine: () => request<Booking[]>('/bookings/me'),
 
+  /** Перенесення власного бронювання на інший час */
+  reschedule: (id: string, startTime: string, endTime: string) =>
+    request<Booking>(`/bookings/${id}`, { method: 'PATCH', body: JSON.stringify({ startTime, endTime }) }),
+
   /** FR-05 */
   cancel: (id: string) => request<Booking>(`/bookings/${id}/cancel`, { method: 'POST' }),
 };

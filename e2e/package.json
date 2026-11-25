@@ -1,0 +1,16 @@
+{
+  "name": "dr-booking-e2e",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Наскрізні (e2e) тести інтегрованої системи та перевірка NFR-02, NFR-05",
+  "scripts": {
+    "test": "playwright test",
+    "typecheck": "tsc --noEmit"
+  },
+  "engines": {
+    "node": ">=22.12"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.65.1"
+  }
+}

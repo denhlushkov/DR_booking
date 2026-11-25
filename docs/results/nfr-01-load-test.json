@@ -1,0 +1,21 @@
+{
+  "measuredAt": "2026-11-25T10:03:33.686Z",
+  "scenario": "GET /api/v1/resources?from&to (перевірка доступності)",
+  "connections": 50,
+  "durationSeconds": 20,
+  "requests": 22499,
+  "requestsPerSecond": 1125,
+  "latencyMs": {
+    "avg": 43.92,
+    "p50": 37,
+    "p90": 75,
+    "p97_5": 88,
+    "p99": 96,
+    "max": 299
+  },
+  "errors": 0,
+  "timeouts": 0,
+  "non2xx": 0,
+  "limitMs": 300,
+  "passed": true
+}
